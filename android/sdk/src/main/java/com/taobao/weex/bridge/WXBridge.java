@@ -19,6 +19,7 @@
 package com.taobao.weex.bridge;
 
 import android.text.TextUtils;
+import android.util.Log;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
@@ -34,6 +35,13 @@ import com.taobao.weex.utils.WXLogUtils;
  */
 class WXBridge implements IWXBridge {
 
+  private native int nativeInitFrameworkEnv(String framework, WXParams params, String cacheDir, boolean pieSupport);
+  private native int nativeInitFramework(String framework, WXParams params);
+  private native int nativeExecJS(String instanceId, String name, String function, WXJSObject[] args);
+  private native void nativeOnVsync(String instanceId);
+  private native int nativeExecJSService(String javascript);
+  private native void nativeTakeHeapSnapshot(String filename);
+
   public static final String TAG = "WXBridge";
 
   public static final boolean MULTIPROCESS = true;
@@ -43,48 +51,46 @@ class WXBridge implements IWXBridge {
    *
    * @param framework assets/main.js
    */
-  public native int initFramework(String framework, WXParams params);
+  @Override
+  public int initFramework(String framework, WXParams params) {
+    return nativeInitFramework(framework, params);
+  }
 
   /**
    * Init JSFrameWork
    *
    * @param framework assets/main.js
    */
-  public native int initFramework(String framework, WXParams params, String cacheDir, boolean pieSupport);
-
-
-  /**
-   * Execute JavaScript function
-   *
-   * @param instanceId
-   * @param namespace  default global
-   * @param function   function string name
-   * @param args       WXJSObject array
-   */
-  public native int execJS(String instanceId, String namespace, String function, WXJSObject[] args);
-
-
-  /**
-   * register Weex Service
-   *
-   * @param javascript  code
-   */
-  public native int execJSService(String javascript);
-
-  /**
-   * Take v8's heap snapshot
-   * @param filename the name of the file to be written.
-   */
-  public native void takeHeapSnapshot(String filename);
-
-
+  @Override
   public int initFrameworkEnv(String framework, WXParams params, String cacheDir, boolean pieSupport){
     if (MULTIPROCESS) {
-      return initFramework(framework, params, cacheDir, pieSupport);
+      return nativeInitFrameworkEnv(framework, params, cacheDir, pieSupport);
     } else {
       return  initFramework(framework, params);
     }
   }
+
+
+  @Override
+  public int execJS(String instanceId, String namespace, String function, WXJSObject[] args) {
+    return nativeExecJS(instanceId, namespace, function, args);
+  }
+
+
+  @Override
+  public int execJSService(String javascript) {
+    return nativeExecJSService(javascript);
+  }
+
+
+  @Override
+  public void takeHeapSnapshot(String filename) {
+    nativeTakeHeapSnapshot(filename);
+  }
+
+
+
+
   /**
    * JavaScript uses this methods to call Android code
    *
@@ -94,9 +100,10 @@ class WXBridge implements IWXBridge {
    */
 
   public int callNative(String instanceId, byte [] tasks, String callback) {
-     return callNative(instanceId,new String(tasks),callback);
+     return callNative(instanceId, tasks == null ? "" : new String(tasks),callback);
   }
 
+  @Override
   public int callNative(String instanceId, String tasks, String callback) {
     long start = System.currentTimeMillis();
     WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
@@ -123,8 +130,42 @@ class WXBridge implements IWXBridge {
     }
     return errorCode;
   }
+
   public int callAddElement(String instanceId, String ref,byte[] dom,String index, String callback) {
-    return callAddElement(instanceId,ref, new String(dom),index,callback);
+      return callAddElement(instanceId, ref, dom == null ? "" : new String(dom), index, callback);
+  }
+
+  /**
+   * JSF render Node by callAddElement
+   */
+  public int callAddElement(String instanceId, String ref,String dom,String index, String callback) {
+
+    long start = System.currentTimeMillis();
+    WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
+    if(instance != null) {
+      instance.firstScreenCreateInstanceTime(start);
+    }
+    int errorCode = IWXBridge.INSTANCE_RENDERING;
+
+    try {
+      errorCode = WXBridgeManager.getInstance().callAddElement(instanceId, ref,dom,index, callback);
+    }catch (Throwable e){
+      //catch everything during call native.
+      // if(WXEnvironment.isApkDebugable()){
+      e.printStackTrace();
+      WXLogUtils.e(TAG,"callNative throw error:"+e.getMessage());
+      // }
+    }
+
+    if(instance != null) {
+      instance.callNativeTime(System.currentTimeMillis() - start);
+    }
+    // if(WXEnvironment.isApkDebugable()){
+    if(errorCode == IWXBridge.DESTROY_INSTANCE){
+      WXLogUtils.w("destroyInstance :"+instanceId+" JSF must stop callNative");
+    }
+    // }
+    return errorCode;
   }
 
   /**
@@ -136,9 +177,10 @@ class WXBridge implements IWXBridge {
    */
 
   public int callCreateBody(String instanceId, byte [] tasks, String callback) {
-    return callCreateBody(instanceId,new String(tasks),callback);
+    return callCreateBody(instanceId,tasks == null ? "" : new String(tasks),callback);
   }
 
+  @Override
   public int callCreateBody(String instanceId, String tasks, String callback) {
     long start = System.currentTimeMillis();
     WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
@@ -161,38 +203,7 @@ class WXBridge implements IWXBridge {
   }
 
 
-  /**
-   * JSF render Node by callAddElement
-   */
-  public int callAddElement(String instanceId, String ref,String dom,String index, String callback) {
 
-    long start = System.currentTimeMillis();
-    WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
-    if(instance != null) {
-      instance.firstScreenCreateInstanceTime(start);
-    }
-    int errorCode = IWXBridge.INSTANCE_RENDERING;
-
-    try {
-      errorCode = WXBridgeManager.getInstance().callAddElement(instanceId, ref,dom,index, callback);
-    }catch (Throwable e){
-      //catch everything during call native.
-      // if(WXEnvironment.isApkDebugable()){
-        e.printStackTrace();
-        WXLogUtils.e(TAG,"callNative throw error:"+e.getMessage());
-      // }
-    }
-
-    if(instance != null) {
-      instance.callNativeTime(System.currentTimeMillis() - start);
-    }
-    // if(WXEnvironment.isApkDebugable()){
-      if(errorCode == IWXBridge.DESTROY_INSTANCE){
-        WXLogUtils.w("destroyInstance :"+instanceId+" JSF must stop callNative");
-      }
-    // }
-    return errorCode;
-  }
 
   /**
    * Report JavaScript error.
@@ -218,10 +229,10 @@ class WXBridge implements IWXBridge {
   @Override
   public Object callNativeModule(String instanceId, String module, String method, byte [] arguments, byte [] options) {
 
-    JSONArray argArray = JSON.parseArray(new String(arguments));
+    JSONArray argArray = JSON.parseArray(arguments == null ? "" : new String(arguments));
     JSONObject optionsObj = null;
     if (options != null) {
-      optionsObj = JSON.parseObject(new String(options));
+      optionsObj = JSON.parseObject(options == null ? "" : new String(options));
     }
     Object object =  WXBridgeManager.getInstance().callNativeModule(instanceId,module,method,argArray,optionsObj);
     return new WXJSObject(object);
@@ -237,7 +248,7 @@ class WXBridge implements IWXBridge {
    */
   @Override
   public void callNativeComponent(String instanceId, String componentRef, String method, byte [] arguments, byte [] options) {
-    JSONArray argArray = JSON.parseArray(new String(arguments));
+    JSONArray argArray = JSON.parseArray(arguments == null ? "" : new String(arguments));
      WXBridgeManager.getInstance().callNativeComponent(instanceId,componentRef,method,argArray,options);
   }
 
@@ -259,6 +270,7 @@ class WXBridge implements IWXBridge {
    * @param callback
    */
 
+  @Override
   public int callUpdateFinish(String instanceId, byte [] tasks, String callback) {
 
     long start = System.currentTimeMillis();
@@ -289,6 +301,7 @@ class WXBridge implements IWXBridge {
    * @param callback
    */
 
+  @Override
   public int callCreateFinish(String instanceId, byte [] tasks, String callback) {
 
     long start = System.currentTimeMillis();
@@ -319,6 +332,7 @@ class WXBridge implements IWXBridge {
    * @param callback
    */
 
+  @Override
   public int callRefreshFinish(String instanceId, byte [] tasks, String callback) {
     long start = System.currentTimeMillis();
     WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
@@ -348,6 +362,7 @@ class WXBridge implements IWXBridge {
    * @param callback
    */
 
+  @Override
   public int callUpdateAttrs(String instanceId, String ref, byte [] tasks, String callback) {
     long start = System.currentTimeMillis();
     WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
@@ -356,7 +371,7 @@ class WXBridge implements IWXBridge {
     }
     int errorCode = IWXBridge.INSTANCE_RENDERING;
     try {
-      errorCode = WXBridgeManager.getInstance().callUpdateAttrs(instanceId, ref, new String(tasks), callback);
+      errorCode = WXBridgeManager.getInstance().callUpdateAttrs(instanceId, ref, tasks == null ? "" : new String(tasks), callback);
     } catch (Throwable e) {
       //catch everything during call native.
       if(WXEnvironment.isApkDebugable()){
@@ -377,6 +392,7 @@ class WXBridge implements IWXBridge {
    * @param callback
    */
 
+  @Override
   public int callUpdateStyle(String instanceId, String ref, byte [] tasks, String callback) {
     long start = System.currentTimeMillis();
     WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
@@ -385,7 +401,8 @@ class WXBridge implements IWXBridge {
     }
     int errorCode = IWXBridge.INSTANCE_RENDERING;
     try {
-      errorCode = WXBridgeManager.getInstance().callUpdateStyle(instanceId, ref, new String(tasks), callback);
+      errorCode = WXBridgeManager.getInstance().callUpdateStyle(instanceId, ref,
+              tasks == null ? "" : new String(tasks), callback);
     } catch (Throwable e) {
       //catch everything during call native.
       if(WXEnvironment.isApkDebugable()){
@@ -406,6 +423,7 @@ class WXBridge implements IWXBridge {
    * @return int
    */
 
+  @Override
   public int callRemoveElement(String instanceId, String ref, String callback) {
     long start = System.currentTimeMillis();
     WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
@@ -436,6 +454,7 @@ class WXBridge implements IWXBridge {
    * @param callback
    * @return int
    */
+  @Override
   public int callMoveElement(String instanceId, String ref, String parentref, String index, String callback) {
     long start = System.currentTimeMillis();
     WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
@@ -466,6 +485,7 @@ class WXBridge implements IWXBridge {
    * @param callback
    * @return int
    */
+  @Override
   public int callAddEvent(String instanceId, String ref, String event, String callback) {
     long start = System.currentTimeMillis();
     WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
@@ -495,6 +515,7 @@ class WXBridge implements IWXBridge {
    * @param callback
    * @return int
    */
+  @Override
   public int callRemoveEvent(String instanceId, String ref, String event, String callback) {
     long start = System.currentTimeMillis();
     WXSDKInstance instance = WXSDKManager.getInstance().getSDKInstance(instanceId);
