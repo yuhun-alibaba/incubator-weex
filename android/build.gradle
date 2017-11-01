@@ -1,7 +1,10 @@
 
 buildscript {
     repositories {
-        mavenCentral()
+        //mavenCentral()
+        maven {
+            url "http://mvnrepo.alibaba-inc.com/mvn/repository"
+        }
         jcenter()
     }
     dependencies {
@@ -15,17 +18,26 @@ plugins {
 }
 
 repositories {
-        mavenCentral()
+       // mavenCentral()
+    maven {
+        url "http://mvnrepo.alibaba-inc.com/mvn/repository"
+    }
         jcenter()
 }
 
 subprojects {
     repositories {
-        mavenCentral()
+        //mavenCentral()
+        maven {
+            url "http://mvnrepo.alibaba-inc.com/mvn/repository"
+        }
         jcenter()
     }
     buildscript {
         repositories {
+            maven {
+                url "http://mvnrepo.alibaba-inc.com/mvn/repository"
+            }
             mavenCentral()
             jcenter()
         }
