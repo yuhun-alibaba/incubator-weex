@@ -73,6 +73,7 @@ class WXBridge implements IWXBridge {
 
   @Override
   public int execJS(String instanceId, String namespace, String function, WXJSObject[] args) {
+    Log.e("WeexCore", "shiwentao execJS instanceId:" + instanceId);
     return nativeExecJS(instanceId, namespace, function, args);
   }
 
@@ -257,6 +258,7 @@ class WXBridge implements IWXBridge {
   }
 
   public void setJSFrmVersion(String version) {
+    Log.e("WeexCore", "setJSFrmVersion version:" + version);
     if(!TextUtils.isEmpty(version)) {
       WXEnvironment.JS_LIB_SDK_VERSION = version;
     }
