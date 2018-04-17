@@ -120,6 +120,7 @@ public class WXBridgeManager implements Callback, BactchExecutor {
   public static final String METHOD_CREATE_INSTANCE_CONTEXT = "createInstanceContext";
   public static final String METHOD_DESTROY_INSTANCE = "destroyInstance";
   public static final String METHOD_CALL_JS = "callJS";
+  public static final String METHOD_CALL_JAVASCRIPT = "__WEEX_CALL_JAVASCRIPT__";
   public static final String METHOD_SET_TIMEOUT = "setTimeoutCallback";
   public static final String METHOD_REGISTER_MODULES = "registerModules";
   public static final String METHOD_REGISTER_COMPONENTS = "registerComponents";
@@ -229,7 +230,7 @@ public class WXBridgeManager implements Callback, BactchExecutor {
         setJSFrameworkInit(false);
         WXModuleManager.resetAllModuleState();
         String jsf = "";
-        if (!isSandBoxContext || WXEnvironment.sDebugServerConnectable) {
+        if (!isSandBoxContext) {
           jsf = WXFileUtils.loadAsset("main.js", WXEnvironment.getApplication());
         } else {
           jsf = WXFileUtils.loadAsset("weex-main-jsfm.js", WXEnvironment.getApplication());
@@ -245,7 +246,7 @@ public class WXBridgeManager implements Callback, BactchExecutor {
             setJSFrameworkInit(false);
             WXModuleManager.resetAllModuleState();
             String jsf = "";
-            if (!isSandBoxContext || WXEnvironment.sDebugServerConnectable) {
+            if (!isSandBoxContext) {
               jsf = WXFileUtils.loadAsset("main.js", WXEnvironment.getApplication());
             } else {
               jsf = WXFileUtils.loadAsset("weex-main-jsfm.js", WXEnvironment.getApplication());
@@ -1750,7 +1751,7 @@ public class WXBridgeManager implements Callback, BactchExecutor {
         instance.setTemplate(template);
         // if { "framework": "Vue" } or  { "framework": "Rax" } will use invokeCreateInstanceContext
         // others will use invokeExecJS
-        if (!isSandBoxContext || WXEnvironment.sDebugServerConnectable) {
+        if (!isSandBoxContext) {
           invokeExecJS(instance.getInstanceId(), null, METHOD_CREATE_INSTANCE, args, false);
           return;
         }
@@ -1958,6 +1959,11 @@ public class WXBridgeManager implements Callback, BactchExecutor {
 
   public void invokeExecJS(String instanceId, String namespace, String function,
                            WXJSObject[] args, boolean logTaskDetail) {
+     if (isSandBoxContext) {
+        if (instanceId != null && function != null && function.equals(METHOD_CALL_JS)) {
+          function = METHOD_CALL_JAVASCRIPT;
+        }
+      }
      if (WXEnvironment.isOpenDebugLog()) {
       mLodBuilder.append("callJS >>>> instanceId:").append(instanceId)
           .append("function:").append(function);
@@ -2023,6 +2029,11 @@ public void invokeDestoryInstance(String instanceId, String namespace, String fu
 
   private byte[] invokeExecJSWithResult(String instanceId, String namespace, String function,
                                        WXJSObject[] args,boolean logTaskDetail){
+    if (isSandBoxContext) {
+      if (instanceId != null && function != null && function.equals(METHOD_CALL_JS)) {
+        function = METHOD_CALL_JAVASCRIPT;
+      }
+    }
     if (WXEnvironment.isOpenDebugLog()) {
       mLodBuilder.append("callJS >>>> instanceId:").append(instanceId)
               .append("function:").append(function);
@@ -2067,7 +2078,7 @@ public void invokeDestoryInstance(String instanceId, String namespace, String fu
         // if (WXEnvironment.isApkDebugable()) {
         WXLogUtils.d("weex JS framework from assets");
         // }
-        if (!isSandBoxContext || WXEnvironment.sDebugServerConnectable) {
+        if (!isSandBoxContext) {
           framework = WXFileUtils.loadAsset("main.js", WXEnvironment.getApplication());
         } else {
           framework = WXFileUtils.loadAsset("weex-main-jsfm.js", WXEnvironment.getApplication());
